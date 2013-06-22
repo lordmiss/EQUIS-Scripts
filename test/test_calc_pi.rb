@@ -1,5 +1,5 @@
 require 'test/unit'
-require 'calc_pi'
+require 'lib/calc_pi'
 
 class TestCalcPI < Test::Unit::TestCase
 	def test_get_seq_from_pdb
