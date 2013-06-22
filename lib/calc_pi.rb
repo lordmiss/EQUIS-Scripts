@@ -27,6 +27,8 @@
 require 'bio'
 require 'bio/db/pdb'
 
+AminoAcids = Bio::AminoAcid.aa.keys[0..19].map {|r| Bio::AminoAcid.to_3(r)}
+
 def get_seq_from_pdb pdb_file, chain_id
 	protein = Bio::PDB.new(IO.read(pdb_file))
 	protein.seqres(chain_id)
@@ -36,6 +38,16 @@ end
 def count_res seq, res_name
 	codes = seq.codes # codes.class = "Array"
 	codes.count(res_name)
+end
+
+def percentage_res seq
+  total = seq.length
+  a = AminoAcids
+  v = Hash.new
+  a.each do |res|
+    v[res] = ((count_res(seq, res) / total.to_f) * 100).round(2)
+  end
+  return v
 end
 
 def count_cys pdb_file, chain_id
