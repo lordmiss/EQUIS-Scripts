@@ -7,7 +7,7 @@ def get_protein pdb_file, chain_id
 end
 
 def get_atoms protein
-	protein.atoms
+	self.atoms
 end
 
 def get_distance a, b
