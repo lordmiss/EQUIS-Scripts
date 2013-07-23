@@ -30,6 +30,36 @@ def get_cx_matrix atoms
 	return scores
 end
 
+def get_cx protein, a # 'a' should be "Bio::PDB::Record::ATOM" class
+	atoms = get_atoms(protein)
+	sphere = 4 / 3 * Math::PI * 1000
+	int_atoms = 0
+	atoms.each do |atom|
+		distance = get_distance(a, atom)
+		unless atom == a
+			int_atoms = int_atoms + 1 if distance < 10.0
+		end
+	end
+	return ((sphere - (int_atoms * 20.1)) / (int_atoms * 20.1)).round(3)
+end
+
+def get_cx_res protein, res # residue name: L111, C25, etc.
+	atoms = get_atoms protein
+	res_name = Bio::AminoAcid::Data::NAMES[res[0]].upcase
+	res_seq = res[1..-1].to_i
+	residue = protein.find_residue {|x| x.resName == res_name && x.resSeq == res_seq}[0]
+	if residue == nil
+		puts "Invalid residue name is provided. Please find the right name."
+		return nil
+	end
+	res_atoms = protein.find_atom {|y| y.resName == res_name && y.resSeq == res_seq}
+	sum = 0
+	res_atoms.each do |atom|
+		sum = sum + get_cx(protein, atom)
+	end
+	return (sum / res_atoms.size).round(3)
+end
+
 def get_cx_avg protein, cx_matrix
 	cx_avg = Array.new(protein.residues.size, 0.0)
 	resNo = 0
