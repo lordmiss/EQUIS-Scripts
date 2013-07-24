@@ -4,6 +4,7 @@ require 'csv'
 
 # TODO
 # 1. Chain ID parsing
+# 2. fix the auto_mutate method (it does not use rsa_file option)
 
 NEUTRALS = ["ALA", "GLY", "ILE", "LEU", "MET", "PRO", "VAL",
 			"ASN", "CYS", "GLN", "SER", "THR", "PHE", "TRP",
@@ -57,11 +58,15 @@ def get_vector_sum protein, res_list
 end
 
 def parse_rsa_file rsa_file
+	# FIXED 2013-07-24
+	# as rsa file is a width-fixed text file, data should be parsed as line[0..2]
+	# rather than line.split(" ")
 	values = Array.new
 	IO.foreach(rsa_file) do |line|
-		items = line.split(" ")
-		if items[0] == "RES"
-			values << [items[3].to_i, items[5].to_f]
+		id = line[10..12].strip.to_i
+		rsa = line[23..27].strip.to_i
+		if line[0..2] == "RES"
+			values << [id, rsa]
 		end
 	end
 	a = values.sort_by {|x| x[0]}
@@ -98,7 +103,6 @@ def calc_procd_score(opts = {})
 	
 	pp = get_vector_sum(protein, pos)
 	nn = get_vector_sum(protein, neg)
-	angle = calc_angle pp, nn
 
 	# mutation
 	if mutation != nil
@@ -108,6 +112,11 @@ def calc_procd_score(opts = {})
 		site = mutation[1..-2].to_i # mutation site number
 		
 		res = protein.find_residue{|res| res.resName == orig && res.resSeq == site}[0]
+		if res == nil
+			puts "Wrong mutation site!"
+			return nil
+		end
+		
 		m_vec = get_normalized_residue_vector protein, res
 		if POSITIVES.include?(orig) && NEGATIVES.include?(mut) # positive -> negative
 			pp = pp - m_vec
@@ -134,6 +143,8 @@ def calc_procd_score(opts = {})
 		end
 	end
 	
+	angle = calc_angle pp, nn
+	
 	# Result output
 	puts "Positive Residues: #{pos_size}"
 	puts "Negative Residues: #{neg_size}"
@@ -156,7 +167,7 @@ end
 
 def auto_mutate(opts={})
 	# Option parsing
-	opts = {:threshold => 10.0, :rsa_file=>nil}.merge(opts)
+	opts = {:threshold => 10.0, :rsa_file=>nil, :chain_id=>nil}.merge(opts)
 	pdb_file = opts.fetch(:pdb_file) # name of pdb file 
 	chain_id = opts.fetch(:chain_id) # chain ID
 	rsa_file = opts.fetch(:rsa_file) # name of rsa file
@@ -164,23 +175,27 @@ def auto_mutate(opts={})
 
 	rsa_option = case threshold
 		when nil
-			"filter"
-		else
 			"none"
+		else
+			"filter"
 	end
+
+	# calculate original procd score
+	orig = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file, :threshold => threshold)
 	
 	time_stamp = Time.new.strftime("%Y%m%d_%H%M%S_%L")
 	output_file_name = "#{pdb_file}_#{time_stamp}.txt"
 	begin
-		protein = Bio::PDB.new(IO.read(pdb_file)).models[0][chain_id]
+		if chain_id == nil
+			protein = Bio::PDB.new(IO.read(pdb_file))
+		else
+			protein = Bio::PDB.new(IO.read(pdb_file)).models[0][chain_id]
+		end
 	rescue
 		puts "Protein file error!"
 		return nil
 	end
 	residues = protein.residues
-	
-	# calculate original procd score
-	orig = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file, :threshold => threshold)
 	
 	# prepare output text
 	output = [[time_stamp],
@@ -193,39 +208,41 @@ def auto_mutate(opts={})
 	# mutate the protein twice per residue
 	residues.each do |res|
 		id = res.id
-		res_name3 = res.resName.capitalize
-		res_name = Bio::AminoAcid.to_1(res_name3) # 1-letter amino acid code
+		res_name = res.resName.upcase
+		res_name_cap = res.resName.capitalize
+		res_name_1 = Bio::AminoAcid.to_1(res_name_cap) # 1-letter amino acid code
 				
-		pos_mutation = "#{res_name}#{id.to_s}K"
-		neg_mutation = "#{res_name}#{id.to_s}D"
-		del_mutation = "#{res_name}#{id.to_s}A"
-		if NEUTRALS.include?(res.resName)
-			pos = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-				:threshold => threshold, :mutation=>pos_mutation)
-			neg = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-				:threshold => threshold, :mutation=>neg_mutation)
-			output << ["[#{res_name3}]#{id.to_s}:#{chain_id}", "positive", "#{pos.fetch(:pos_size)}",
-			"#{pos.fetch(:neg_size)}", "#{pos.fetch(:pp_length)}", "#{pos.fetch(:nn_length)}", "#{pos.fetch(:score)}"]
-			output << ["[#{res_name3}]#{id.to_s}:#{chain_id}", "negative", "#{neg.fetch(:pos_size)}",
-			"#{neg.fetch(:neg_size)}", "#{neg.fetch(:pp_length)}", "#{neg.fetch(:nn_length)}", "#{neg.fetch(:score)}"]
-		elsif POSITIVES.include?(res.resName)
-			del = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-				:threshold => threshold, :mutation=>del_mutation)
-			neg = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-				:threshold => threshold, :mutation=>neg_mutation)
-			output << ["[#{res_name3}]#{id.to_s}:#{chain_id}", "delete", "#{del.fetch(:pos_size)}",
-			"#{del.fetch(:neg_size)}", "#{del.fetch(:pp_length)}", "#{del.fetch(:nn_length)}", "#{del.fetch(:score)}"]
-			output << ["[#{res_name3}]#{id.to_s}:#{chain_id}", "pos->neg", "#{neg.fetch(:pos_size)}",
-			"#{neg.fetch(:neg_size)}", "#{neg.fetch(:pp_length)}", "#{neg.fetch(:nn_length)}", "#{neg.fetch(:score)}"]
-		else
-			del = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-				:threshold => threshold, :mutation=>del_mutation)
-			pos = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-				:threshold => threshold, :mutation=>pos_mutation)
-			output << ["[#{res_name3}]#{id.to_s}:#{chain_id}", "delete", "#{del.fetch(:pos_size)}",
-			"#{del.fetch(:neg_size)}", "#{del.fetch(:pp_length)}", "#{del.fetch(:nn_length)}", "#{del.fetch(:score)}"]
-			output << ["[#{res_name3}]#{id.to_s}:#{chain_id}", "neg->pos", "#{pos.fetch(:pos_size)}",
-			"#{pos.fetch(:neg_size)}", "#{pos.fetch(:pp_length)}", "#{pos.fetch(:nn_length)}", "#{pos.fetch(:score)}"]
+		pos_mutation = "#{res_name_1}#{id.to_s}K"
+		neg_mutation = "#{res_name_1}#{id.to_s}D"
+		del_mutation = "#{res_name_1}#{id.to_s}A"
+		case res_name
+			when "ASP", "GLU"
+				del = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
+					:threshold => threshold, :mutation=>del_mutation)
+				pos = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
+					:threshold => threshold, :mutation=>pos_mutation)
+				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "delete", "#{del.fetch(:pos_size)}",
+				"#{del.fetch(:neg_size)}", "#{del.fetch(:pp_length)}", "#{del.fetch(:nn_length)}", "#{del.fetch(:score)}"]
+				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "neg->pos", "#{pos.fetch(:pos_size)}",
+				"#{pos.fetch(:neg_size)}", "#{pos.fetch(:pp_length)}", "#{pos.fetch(:nn_length)}", "#{pos.fetch(:score)}"]
+			when "LYS", "ARG"
+				del = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
+					:threshold => threshold, :mutation=>del_mutation)
+				neg = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
+					:threshold => threshold, :mutation=>neg_mutation)
+				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "delete", "#{del.fetch(:pos_size)}",
+				"#{del.fetch(:neg_size)}", "#{del.fetch(:pp_length)}", "#{del.fetch(:nn_length)}", "#{del.fetch(:score)}"]
+				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "pos->neg", "#{neg.fetch(:pos_size)}",
+				"#{neg.fetch(:neg_size)}", "#{neg.fetch(:pp_length)}", "#{neg.fetch(:nn_length)}", "#{neg.fetch(:score)}"]
+			else
+				pos = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
+					:threshold => threshold, :mutation=>pos_mutation)
+				neg = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
+					:threshold => threshold, :mutation=>neg_mutation)
+				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "positive", "#{pos.fetch(:pos_size)}",
+				"#{pos.fetch(:neg_size)}", "#{pos.fetch(:pp_length)}", "#{pos.fetch(:nn_length)}", "#{pos.fetch(:score)}"]
+				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "negative", "#{neg.fetch(:pos_size)}",
+				"#{neg.fetch(:neg_size)}", "#{neg.fetch(:pp_length)}", "#{neg.fetch(:nn_length)}", "#{neg.fetch(:score)}"]
 		end
 	end
 	
