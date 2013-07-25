@@ -4,7 +4,7 @@ require 'csv'
 
 # TODO
 # 1. Chain ID parsing
-# 2. fix the auto_mutate method (it does not use rsa_file option)
+# 2. fix the auto_mutate method (it does not use rsa_file option) : SOLVED
 
 NEUTRALS = ["ALA", "GLY", "ILE", "LEU", "MET", "PRO", "VAL",
 			"ASN", "CYS", "GLN", "SER", "THR", "PHE", "TRP",
@@ -36,10 +36,11 @@ def get_res_list_by_charge(opts = {})
 	end
 	
 	residues.each do |res|
+    res_name = res.resName.upcase
 		case charge.upcase
-			when "P" then list << res if positives.include?(res.resName)
-			when "N" then list << res if negatives.include?(res.resName)
-			else list << res if neutrals.include?(res.resName)
+			when "P" then list << res if (res_name == "ARG") || (res_name == "LYS")
+			when "N" then list << res if (res_name == "ASP") || (res_name == "GLU")
+			else list << res if neutrals.include?(res_name)
 		end
 	end
 	return list # returns an array of residues
@@ -181,7 +182,7 @@ def auto_mutate(opts={})
 	end
 
 	# calculate original procd score
-	orig = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file, :threshold => threshold)
+	orig = calc_procd_score(:pdb_file => pdb_file, :rsa_file => rsa_file, :threshold => threshold)
 	
 	time_stamp = Time.new.strftime("%Y%m%d_%H%M%S_%L")
 	output_file_name = "#{pdb_file}_#{time_stamp}.txt"
