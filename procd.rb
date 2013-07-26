@@ -76,11 +76,11 @@ end
 
 def calc_procd_score(opts = {})
 	# option parsing
-	opts = {:threshold => 10.0, :rsa_file=>nil, :mutation=>nil }.merge(opts) # default threshold is 10.0
+	opts = {:threshold => 10.0, :rsa_file=>nil, :mutations=>nil }.merge(opts) # default threshold is 10.0
 	pdb_file = opts.fetch(:pdb_file) # name of pdb file 
 	rsa_file = opts.fetch(:rsa_file) # name of rsa file
 	threshold = opts.fetch(:threshold) # RSA threshold
-	mutation = opts.fetch(:mutation) # mutation
+	mutations = opts.fetch(:mutations) # mutations
 	
 	# parse protein
 	begin
@@ -106,41 +106,43 @@ def calc_procd_score(opts = {})
 	nn = get_vector_sum(protein, neg)
 
 	# mutation
-	if mutation != nil
-		# parse mutation, mutation should have this form, E421Q
-		orig = Bio::AminoAcid::Data::NAMES[mutation[0]].upcase # 3-letter code
-		mut = Bio::AminoAcid::Data::NAMES[mutation[-1]].upcase # 3-letter code
-		site = mutation[1..-2].to_i # mutation site number
+	if mutations != nil
+		mutations.split(" ").each do |mutation|
+			# parse mutation, mutation should have this form, E421Q
+			orig = Bio::AminoAcid::Data::NAMES[mutation[0]].upcase # 3-letter code
+			mut = Bio::AminoAcid::Data::NAMES[mutation[-1]].upcase # 3-letter code
+			site = mutation[1..-2].to_i # mutation site number
 		
-		res = protein.find_residue{|res| res.resName == orig && res.resSeq == site}[0]
-		if res == nil
-			puts "Wrong mutation site!"
-			return nil
-		end
+			res = protein.find_residue{|res| res.resName == orig && res.resSeq == site}[0]
+			if res == nil
+				puts "Wrong mutation site!"
+				return nil
+			end
 		
-		m_vec = get_normalized_residue_vector protein, res
-		if POSITIVES.include?(orig) && NEGATIVES.include?(mut) # positive -> negative
-			pp = pp - m_vec
-			nn = nn + m_vec
-			pos_size = pos_size - 1
-			neg_size = neg_size + 1
-		elsif POSITIVES.include?(orig) && NEUTRALS.include?(mut) # positive delete
-			pp = pp - m_vec
-			pos_size = pos_size - 1
-		elsif NEGATIVES.include?(orig) && POSITIVES.include?(mut) # negative -> positive
-			pp = pp + m_vec
-			nn = nn - m_vec
-			pos_size = pos_size + 1
-			neg_size = neg_size - 1
-		elsif NEGATIVES.include?(orig) && NEUTRALS.include?(mut) # negative delete
-			nn = nn - m_vec
-			neg_size = neg_size - 1
-		elsif NEUTRALS.include?(orig) && POSITIVES.include?(mut) # positive add
-			pp = pp + m_vec
-			pos_size = pos_size + 1
-		elsif NEUTRALS.include?(orig) && NEGATIVES.include?(mut) # negative add
-			nn = nn + m_vec
-			neg_size = neg_size + 1
+			m_vec = get_normalized_residue_vector protein, res
+			if POSITIVES.include?(orig) && NEGATIVES.include?(mut) # positive -> negative
+				pp = pp - m_vec
+				nn = nn + m_vec
+				pos_size = pos_size - 1
+				neg_size = neg_size + 1
+			elsif POSITIVES.include?(orig) && NEUTRALS.include?(mut) # positive delete
+				pp = pp - m_vec
+				pos_size = pos_size - 1
+			elsif NEGATIVES.include?(orig) && POSITIVES.include?(mut) # negative -> positive
+				pp = pp + m_vec
+				nn = nn - m_vec
+				pos_size = pos_size + 1
+				neg_size = neg_size - 1
+			elsif NEGATIVES.include?(orig) && NEUTRALS.include?(mut) # negative delete
+				nn = nn - m_vec
+				neg_size = neg_size - 1
+			elsif NEUTRALS.include?(orig) && POSITIVES.include?(mut) # positive add
+				pp = pp + m_vec
+				pos_size = pos_size + 1
+			elsif NEUTRALS.include?(orig) && NEGATIVES.include?(mut) # negative add
+				nn = nn + m_vec
+				neg_size = neg_size + 1
+			end
 		end
 	end
 	
@@ -218,28 +220,28 @@ def auto_mutate(opts={})
 		del_mutation = "#{res_name_1}#{id.to_s}A"
 		case res_name
 			when "ASP", "GLU"
-				del = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-					:threshold => threshold, :mutation=>del_mutation)
-				pos = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-					:threshold => threshold, :mutation=>pos_mutation)
+				del = calc_procd_score(:pdb_file => pdb_file, :rsa_file => rsa_file,
+					:threshold => threshold, :mutations=>del_mutation)
+				pos = calc_procd_score(:pdb_file => pdb_file, :rsa_file => rsa_file,
+					:threshold => threshold, :mutations=>pos_mutation)
 				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "delete", "#{del.fetch(:pos_size)}",
 				"#{del.fetch(:neg_size)}", "#{del.fetch(:pp_length)}", "#{del.fetch(:nn_length)}", "#{del.fetch(:score)}"]
 				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "neg->pos", "#{pos.fetch(:pos_size)}",
 				"#{pos.fetch(:neg_size)}", "#{pos.fetch(:pp_length)}", "#{pos.fetch(:nn_length)}", "#{pos.fetch(:score)}"]
 			when "LYS", "ARG"
-				del = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-					:threshold => threshold, :mutation=>del_mutation)
-				neg = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-					:threshold => threshold, :mutation=>neg_mutation)
+				del = calc_procd_score(:pdb_file => pdb_file, :rsa_file => rsa_file,
+					:threshold => threshold, :mutations=>del_mutation)
+				neg = calc_procd_score(:pdb_file => pdb_file, :rsa_file => rsa_file,
+					:threshold => threshold, :mutations=>neg_mutation)
 				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "delete", "#{del.fetch(:pos_size)}",
 				"#{del.fetch(:neg_size)}", "#{del.fetch(:pp_length)}", "#{del.fetch(:nn_length)}", "#{del.fetch(:score)}"]
 				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "pos->neg", "#{neg.fetch(:pos_size)}",
 				"#{neg.fetch(:neg_size)}", "#{neg.fetch(:pp_length)}", "#{neg.fetch(:nn_length)}", "#{neg.fetch(:score)}"]
 			else
-				pos = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-					:threshold => threshold, :mutation=>pos_mutation)
-				neg = calc_procd_score(:pdb_file => pdb_file, rsa_file => rsa_file,
-					:threshold => threshold, :mutation=>neg_mutation)
+				pos = calc_procd_score(:pdb_file => pdb_file, :rsa_file => rsa_file,
+					:threshold => threshold, :mutations=>pos_mutation)
+				neg = calc_procd_score(:pdb_file => pdb_file, :rsa_file => rsa_file,
+					:threshold => threshold, :mutations=>neg_mutation)
 				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "positive", "#{pos.fetch(:pos_size)}",
 				"#{pos.fetch(:neg_size)}", "#{pos.fetch(:pp_length)}", "#{pos.fetch(:nn_length)}", "#{pos.fetch(:score)}"]
 				output << ["[#{res_name_cap}]#{id.to_s}:#{chain_id}", "negative", "#{neg.fetch(:pos_size)}",
