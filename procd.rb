@@ -2,6 +2,8 @@ require 'bio'
 require 'bio/db/pdb'
 require 'csv'
 
+# Edit!
+
 # TODO
 # 1. Chain ID parsing
 
@@ -70,11 +72,11 @@ end
 
 def calc_procd_score(opts = {})
 	# option parsing
-	opts = {:threshold => 10.0, :rsa_file=>nil, :mutation=>nil }.merge(opts) # default threshold is 10.0
-	pdb_file = opts.fetch(:pdb_file) # name of pdb file 
-	rsa_file = opts.fetch(:rsa_file) # name of rsa file
-	threshold = opts.fetch(:threshold) # RSA threshold
-	mutation = opts.fetch(:mutation) # mutation
+	opts = {:threshold => 10.0, :rsa_file=>nil, :mutation=>nil }.merge(opts) # default threshold is 10.0     <- default option. if no user input, use default parameter
+	pdb_file = opts.fetch(:pdb_file) # name of pdb file  user
+	rsa_file = opts.fetch(:rsa_file) # name of rsa file  optional
+	threshold = opts.fetch(:threshold) # RSA threshold	  optional
+	mutation = opts.fetch(:mutation) # mutation	  optional
 	
 	# parse protein
 	begin
