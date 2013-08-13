@@ -51,7 +51,7 @@ Choice.options do
 		short '-m'
 		long '--mutations=MUTATIONS'
 		desc 'Specifies mutation sites, e.g. "D65A A109Q"'
-		validate /[A-Z]{1}\d+[A-Z]{1}\s?/
+		validate /([A-Z]{1}\d+[A-Z]{1}\s?)/
 	end
 	
 	separator ''
