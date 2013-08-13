@@ -1,4 +1,4 @@
-require 'bio'
+#require 'bio'
 require 'bio/db/pdb'
 require 'csv'
 
@@ -64,10 +64,17 @@ def parse_rsa_file rsa_file
 	# rather than line.split(" ")
 	values = Array.new
 	IO.foreach(rsa_file) do |line|
-		id = line[10..12].strip.to_i
-		rsa = line[23..27].strip.to_i
 		if line[0..2] == "RES"
-			values << [id, rsa]
+			# FIXED 2013-08-12
+			# as some rsa files are delimited by space(s), data should not be
+			# parsed using text position.
+			
+			#id = line[10..12].strip.to_i
+			#rsa = line[23..27].strip.to_i
+			#chain_id = line[8]
+			data = line[9..-1].split(" ").map{|x| x.to_f}
+			id, rsa = data[0], data[2]
+			values << [id.to_i, rsa]
 		end
 	end
 	a = values.sort_by {|x| x[0]}
@@ -86,8 +93,7 @@ def calc_procd_score(opts = {})
 	begin
 		protein = Bio::PDB.new(IO.read(pdb_file))
 	rescue
-		puts "Protein file error!"
-		return nil
+		return {:error_code => 1}
 	end
 	residues = protein.residues
 	
@@ -102,8 +108,17 @@ def calc_procd_score(opts = {})
 	pos_size = pos.size
 	neg_size = neg.size
 	
-	pp = get_vector_sum(protein, pos)
-	nn = get_vector_sum(protein, neg)
+	if pos_size == 0
+		pp = 0
+	else
+		pp = get_vector_sum(protein, pos)
+	end
+	
+	if neg_size == 0
+		nn = 0
+	else
+		nn = get_vector_sum(protein, neg)
+	end
 
 	# mutation
 	if mutations != nil
@@ -115,8 +130,7 @@ def calc_procd_score(opts = {})
 		
 			res = protein.find_residue{|res| res.resName == orig && res.resSeq == site}[0]
 			if res == nil
-				puts "Wrong mutation site!"
-				return nil
+				return {:error_code => 2}
 			end
 		
 			m_vec = get_normalized_residue_vector protein, res
@@ -146,21 +160,28 @@ def calc_procd_score(opts = {})
 		end
 	end
 	
-	angle = calc_angle pp, nn
+	if (pp == 0) || (nn == 0)
+		angle = 0
+		score = 0
+	else
+		angle = calc_angle pp, nn
+		score = pp.magnitude/nn.magnitude
+	end
 	
 	# Result output
-	puts "Positive Residues: #{pos_size}"
-	puts "Negative Residues: #{neg_size}"
-	puts "Magnitude of P sum vector: #{pp.magnitude.round(3).to_s}"
-	puts "Magnitude of N sum vector: #{nn.magnitude.round(3).to_s}"
-	puts "Angle between two vectors: #{angle.round(2).to_s}"
-	puts "ProCD Score: #{(pp.magnitude/nn.magnitude).round(3)}"
+	# puts "Positive Residues: #{pos_size}"
+	# puts "Negative Residues: #{neg_size}"
+	# puts "Magnitude of P sum vector: #{pp.magnitude.round(3).to_s}"
+	# puts "Magnitude of N sum vector: #{nn.magnitude.round(3).to_s}"
+	# puts "Angle between two vectors: #{angle.round(2).to_s}"
+	# puts "ProCD Score: #{(pp.magnitude/nn.magnitude).round(3)}"
 	
 	values = {:pos_size => pos_size, :neg_size => neg_size,
 			:pp_length => pp.magnitude.round(3),
 			:nn_length => nn.magnitude.round(3),
 			:angle => angle.round(2),
-			:score => (pp.magnitude/nn.magnitude).round(3)}
+			:score => score.round(3),
+			:error_code => 0}
 	return values
 end
 
