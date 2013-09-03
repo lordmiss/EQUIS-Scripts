@@ -9,7 +9,8 @@ class NAcid < Bio::Sequence::NA
 	#   seq.calc_tm[:b_tm] # basic tm value
 	#   seq.calc_tm(:conc_na => 0.10) # 100 nM Na+
 	#   NAcid.new("").calc_tm # { :error_code => 1 }
-	#
+	# ---
+	# *Returns* Hash object
 	def calc_tm(opts = {})
 		opts = { :conc_na => 0.05 }.merge(opts)
 		conc_na = opts[:conc_na]
@@ -30,14 +31,25 @@ class NAcid < Bio::Sequence::NA
 		return {:error_code=>0, :tm=>tm.round(2), :b_tm=>b_tm.round(2)}
 	end
 	
-	# get front half sequence
+	# Returns a new sequence object (front half)
+	# When sequence length is odd, center na is excluded
+	#
+	#   seq = NAcid.new("agtcctgca")
+	#   seq.get_f_half # "agtc"
+	# ---
+	# *Returns* NAcid object
 	def get_f_half
 		half = (self.length) / 2
 		self[0..(half - 1)]
 	end
 	
-	# get tail half sequence
-	# exclude the center NA if sequence length is odd
+	# Returns a new sequence object (terminal half)
+	# When sequence length is odd, center na is excluded
+	#
+	#   seq = NAcid.new("agtcctgca")
+	#   seq.get_f_half # "tgca"
+	# ---
+	# *Returns* NAcid object
 	def get_t_half
 		half = (self.length) / 2
 		if self.length % 2 == 0
@@ -47,12 +59,26 @@ class NAcid < Bio::Sequence::NA
 		end
 	end
 	
+	# Returns true if the sequence is symmetric
+	# (front half is the complement of terminal half)
+	#
+	#   seq = NAcid.new("atgcgcat")
+	#   seq.is_symmetric? # true
+	# ---
+	# *Returns* true or false
 	def is_symmetric?
 		f_end = self.get_f_half
 		t_end = self.get_t_half
 		f_end == t_end.complement
 	end
 	
+	# Returns an array with the symmetric part sequence,
+	# and the index of this sequence
+	#
+	#   seq = NAcid.new("ggctggtgcaagtcacagacttggctg")
+	#   seq.get_symmetric_part # ["caagt", 8]
+	# ---
+	# *Returns* and array with 2 elements
 	def get_symmetric_part
 		f_end = self.get_f_half.to_s
 		t_end_c = self.get_t_half.complement.to_s # complement sequence of tail half sequence
@@ -61,6 +87,21 @@ class NAcid < Bio::Sequence::NA
 		return [longest_common, i]
 	end
 	
+	# Returns a complement sequence which will have higher Tm value
+	# than input float number
+	#
+	#   seq = NAcid.new("ggctggtgcaagtcacagacttggctg")
+	#   seq.find_seq_at_tm(40.0) # "cttgcaccagcc"
+	#
+	# Input sequence should be longer than 4. If shorter, nil will be returned.
+	# Input Tm value should be smaller than the Tm of input sequence. Else, nil
+	# will be returned.
+	#   NAcid.new("atgc").find_seq_at_tm(15) # nil
+	#   seq.find_seq_at_tm(80) # nil
+	# ---
+	# *Arguments"
+	# * (required) tm: Float
+	# *Returns" NAcid object 
 	def find_seq_at_tm(tm)
 		val = nil
 		if tm.to_f > 12.0
@@ -71,7 +112,7 @@ class NAcid < Bio::Sequence::NA
 				while self[0..i].calc_tm[:tm] < tm
 					i += 1
 				end
-				val = self[0..i]
+				val = self[0..i].complement
 			end
 		end
 		return val
