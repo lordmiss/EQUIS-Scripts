@@ -11,6 +11,8 @@ class TestProCD < Test::Unit::TestCase
     assert_equal get_res_list_by_charge(:protein=>@@protein, :charge=>"N").size, 13
     # with rsa filter
     assert_equal get_res_list_by_charge(:protein=>@@protein, :rsa_file=>@@rsa_file, :threshold=>10.0, :charge=>"N").size, 12
+    # wrong option (other than p and n)
+    assert_equal get_res_list_by_charge(:protein=>@@protein, :charge=>"a").size, 0
   end
   
   def test_get_normalized_residue_vector
@@ -49,5 +51,10 @@ class TestProCD < Test::Unit::TestCase
     # 5. when threshold value is big, the result should be zero
     assert_equal calc_procd_score(:pdb_file => "test/2D9Q_A.pdb", :rsa_file => @@rsa_file,
 	  :threshold=>100.0).fetch(:score), 0
+    # 6. mutations option1 : suc (succinylation)
+    assert_equal calc_procd_score(:pdb_file => "test/2D9Q_A.pdb", :rsa_file => @@rsa_file,
+	  :threshold=>10.0, :mutations => "suc").fetch(:score), 0.296
+    assert_equal calc_procd_score(:pdb_file => "test/2D9Q_A.pdb", :rsa_file => @@rsa_file,
+	  :threshold=>10.0, :mutations => "suc").fetch(:pos_size), 5
   end
 end

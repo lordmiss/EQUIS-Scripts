@@ -2,10 +2,13 @@
 ## Written by Hanjo Kim
 ## 2013. 8. 9
 
+## CHANGES
+## 1. [2013. 9. 11] Added '-m suc' option. This option will mutate all lysines to negative charges.
+
 require 'choice' # for option parsing
 require File.dirname(__FILE__) + '/lib/procd'
 
-PROGRAM_VERSION = 1.0
+PROGRAM_VERSION = "1.0.1"
 
 Choice.options do
 	banner "### ProCD command-line version #{PROGRAM_VERSION} ############################################\n"
@@ -51,7 +54,9 @@ Choice.options do
 		short '-m'
 		long '--mutations=MUTATIONS'
 		desc 'Specifies mutation sites, e.g. "D65A A109Q"'
-		validate /([A-Z]{1}\d+[A-Z]{1}\s?)/
+    desc 'Multiple mutations should be double quoted.'
+    desc '"suc" means "all Lys to negative"'
+		validate /(suc)|([A-Z]{1}\d+[A-Z]{1}\s?)/
 	end
 	
 	separator ''

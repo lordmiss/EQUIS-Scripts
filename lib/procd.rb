@@ -6,6 +6,9 @@ require 'csv'
 # 1. Chain ID parsing
 # 2. fix the auto_mutate method (it does not use rsa_file option) : SOLVED
 
+# CHANGES
+# 1. [2013. 9. 11] Added '-m suc' option. This option will mutate all lysines to negative charges.
+
 NEUTRALS = ["ALA", "GLY", "ILE", "LEU", "MET", "PRO", "VAL",
 			"ASN", "CYS", "GLN", "SER", "THR", "PHE", "TRP",
 			"TYR", "ARG", "HIS"]
@@ -25,25 +28,44 @@ def get_res_list_by_charge(opts = {})
 	positives = POSITIVES
 	negatives = NEGATIVES
 	
-	residues = protein.residues.sort_by {|x| x.resSeq}
-	if (rsa_file != nil)
-		rsa = parse_rsa_file rsa_file
-		del = Array.new
-		rsa.each do |l|
-			del << l[0] if l[1] < threshold
-		end
-		residues.delete_if {|res| del.include?(res.resSeq)}
-	end
-	
-	residues.each do |res|
-    res_name = res.resName.upcase
-		case charge.upcase
-			when "P" then list << res if (res_name == "ARG") || (res_name == "LYS")
-			when "N" then list << res if (res_name == "ASP") || (res_name == "GLU")
-			else list << res if neutrals.include?(res_name)
-		end
-	end
-	return list # returns an array of residues
+  pos = protein.find_residue{|r| r.resName == "LYS" || r.resName == "ARG"}
+  neg = protein.find_residue{|r| r.resName == "ASP" || r.resName == "GLU"}
+  
+  if (rsa_file != nil)
+    rsa = parse_rsa_file rsa_file
+    del = Array.new
+    rsa.each do |l|
+      del << l[0] if l[1] < threshold
+    end
+    pos.delete_if {|res| del.include?(res.resSeq)}
+    neg.delete_if {|res| del.include?(res.resSeq)}
+  end
+  
+  case charge.upcase
+  when "P" then return pos
+  when "N" then return neg
+  else return []
+  end
+  
+  # residues = protein.residues.sort_by {|x| x.resSeq}
+  # if (rsa_file != nil)
+  #   rsa = parse_rsa_file rsa_file
+  #   del = Array.new
+  #   rsa.each do |l|
+  #     del << l[0] if l[1] < threshold
+  #   end
+  #   residues.delete_if {|res| del.include?(res.resSeq)}
+  # end
+  # 
+  # residues.each do |res|
+  #     res_name = res.resName.upcase
+  #   case charge.upcase
+  #     when "P" then list << res if (res_name == "ARG") || (res_name == "LYS")
+  #     when "N" then list << res if (res_name == "ASP") || (res_name == "GLU")
+  #     else list << res if neutrals.include?(res_name)
+  #   end
+  # end
+  # return list # returns an array of residues
 end
 
 def get_normalized_residue_vector protein, res
@@ -122,42 +144,58 @@ def calc_procd_score(opts = {})
 
 	# mutation
 	if mutations != nil
-		mutations.split(" ").each do |mutation|
-			# parse mutation, mutation should have this form, E421Q
-			orig = Bio::AminoAcid::Data::NAMES[mutation[0]].upcase # 3-letter code
-			mut = Bio::AminoAcid::Data::NAMES[mutation[-1]].upcase # 3-letter code
-			site = mutation[1..-2].to_i # mutation site number
+    case mutations.upcase
+    when "SUC"
+      lys = protein.find_residue{|r| r.resName == "LYS"}
+      lys_vec = get_vector_sum(protein, lys)
+      lys_num = lys.size
+      pp = pp - lys_vec
+      nn = nn + lys_vec
+      pos_size = pos_size - lys_num
+      neg_size = neg_size + lys_num
+    when "AMI"
+      pp = pp + nn
+      nn = 0
+      pos_size = pos_size + neg_size
+      neg_size = 0
+    else
+		  mutations.split(" ").each do |mutation|
+			  # parse mutation, mutation should have this form, E421Q
+			  orig = Bio::AminoAcid::Data::NAMES[mutation[0]].upcase # 3-letter code
+			  mut = Bio::AminoAcid::Data::NAMES[mutation[-1]].upcase # 3-letter code
+			  site = mutation[1..-2].to_i # mutation site number
 		
-			res = protein.find_residue{|res| res.resName == orig && res.resSeq == site}[0]
-			if res == nil
-				return {:error_code => 2}
-			end
+			  res = protein.find_residue{|res| res.resName == orig && res.resSeq == site}[0]
+			  if res == nil
+			    return {:error_code => 2}
+			  end
 		
-			m_vec = get_normalized_residue_vector protein, res
-			if POSITIVES.include?(orig) && NEGATIVES.include?(mut) # positive -> negative
-				pp = pp - m_vec
-				nn = nn + m_vec
-				pos_size = pos_size - 1
-				neg_size = neg_size + 1
-			elsif POSITIVES.include?(orig) && NEUTRALS.include?(mut) # positive delete
-				pp = pp - m_vec
-				pos_size = pos_size - 1
-			elsif NEGATIVES.include?(orig) && POSITIVES.include?(mut) # negative -> positive
-				pp = pp + m_vec
-				nn = nn - m_vec
-				pos_size = pos_size + 1
-				neg_size = neg_size - 1
-			elsif NEGATIVES.include?(orig) && NEUTRALS.include?(mut) # negative delete
-				nn = nn - m_vec
-				neg_size = neg_size - 1
-			elsif NEUTRALS.include?(orig) && POSITIVES.include?(mut) # positive add
-				pp = pp + m_vec
-				pos_size = pos_size + 1
-			elsif NEUTRALS.include?(orig) && NEGATIVES.include?(mut) # negative add
-				nn = nn + m_vec
-				neg_size = neg_size + 1
-			end
-		end
+			  m_vec = get_normalized_residue_vector protein, res
+			  if POSITIVES.include?(orig) && NEGATIVES.include?(mut) # positive -> negative
+				  pp = pp - m_vec
+				  nn = nn + m_vec
+				  pos_size = pos_size - 1
+				  neg_size = neg_size + 1
+			  elsif POSITIVES.include?(orig) && NEUTRALS.include?(mut) # positive delete
+				  pp = pp - m_vec
+				  pos_size = pos_size - 1
+			  elsif NEGATIVES.include?(orig) && POSITIVES.include?(mut) # negative -> positive
+				  pp = pp + m_vec
+				  nn = nn - m_vec
+				  pos_size = pos_size + 1
+				  neg_size = neg_size - 1
+			  elsif NEGATIVES.include?(orig) && NEUTRALS.include?(mut) # negative delete
+				  nn = nn - m_vec
+				  neg_size = neg_size - 1
+			  elsif NEUTRALS.include?(orig) && POSITIVES.include?(mut) # positive add
+				  pp = pp + m_vec
+				  pos_size = pos_size + 1
+			  elsif NEUTRALS.include?(orig) && NEGATIVES.include?(mut) # negative add
+			    nn = nn + m_vec
+				  neg_size = neg_size + 1
+			  end
+		  end
+    end
 	end
 	
 	if (pp == 0) || (nn == 0)
