@@ -41,8 +41,11 @@ class TestNAcid < Test::Unit::TestCase
 	def test_find_seq_at_tm
 		assert_nil(@seq.find_seq_at_tm(100))
 		assert_nil(@seq.find_seq_at_tm(12))
-		assert_equal("ggctggtgcaag", @seq.find_seq_at_tm(40))
+		assert_equal("cttgcaccagcc", @seq.find_seq_at_tm(40))
 		assert_equal(20, @seq.find_seq_at_tm(60).size)
+	end
+	
+	def test_mutate_seq_at_tm
 	end
 
 	end # of TestNA

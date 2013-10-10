@@ -55,9 +55,13 @@ def count_cys pdb_file, chain_id
 	codes = protein.seqres(chain_id)
 	total_cys_number = codes.count("Cys")
 	all_ssbonded_cys = protein.record["SSBOND"]
-	all_ssbonded_cys.keep_if {|c| (c.original_data[0][15] == chain_id)&&(c.original_data[0][29]==chain_id)}
-	free_cys = total_cys_number - (all_ssbonded_cys.size * 2)
-	return free_cys
+  if all_ssbonded_cys == nil
+    return total_cys_number
+  else
+	  all_ssbonded_cys.keep_if {|c| (c.original_data[0][15] == chain_id)&&(c.original_data[0][29]==chain_id)}
+	  free_cys = total_cys_number - (all_ssbonded_cys.size * 2)
+	  return free_cys
+  end
 end
 
 def calc_nq ph, asp_number, glu_number, cys_number, tyr_number, his_number, lys_number, arg_number

@@ -118,6 +118,49 @@ class NAcid < Bio::Sequence::NA
 		return val
 	end
 	
+	def mutate_seq_at_tm(tm, keep)
+	  val = nil
+	  max_tm = self.calc_tm[:tm]
+	  size = self.size
+	  s = keep # start position
+	  e = size - keep - 1 # end position
+	  
+	  sd = self.dup
+	  target = sd[s..e].complement
+	  
+	  if (tm.to_f > 12.0) && (tm.to_f < max_tm)
+	    sd
+	  end
+	  return val
+	end
+	
+	def mutate3(position)
+	  seq = self
+	  output = [seq.dup, seq.dup, seq.dup]
+	  orig = self[position]
+	  case orig
+	  when "a"
+	    output[0][position] = "t"
+	    output[1][position] = "g"
+	    output[2][position] = "c"
+	  when "t"
+	    output[0][position] = "a"
+      output[1][position] = "g"
+      output[2][position] = "c"
+    when "g"
+      output[0][position] = "t"
+      output[1][position] = "a"
+      output[2][position] = "c"
+    when "c"
+      output[0][position] = "t"
+      output[1][position] = "g"
+      output[2][position] = "a"
+    else
+      return nil
+    end
+    return output
+	end
+	
 end # class NA
 
 class String
