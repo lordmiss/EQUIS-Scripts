@@ -8,6 +8,7 @@ require 'csv'
 
 # CHANGES
 # 1. [2013. 9. 11] Added '-m suc' option. This option will mutate all lysines to negative charges.
+# 2. [2013. 10. 10] Added dpx weighted calculation routine
 
 NEUTRALS = ["ALA", "GLY", "ILE", "LEU", "MET", "PRO", "VAL",
 			"ASN", "CYS", "GLN", "SER", "THR", "PHE", "TRP",
@@ -17,11 +18,13 @@ NEGATIVES = ["ASP", "GLU"]
 
 def get_res_list_by_charge(opts = {})
 	# Option parsing
-	opts = {:threshold => 10.0, :rsa_file => nil }.merge(opts)
+	opts = {:threshold => 10.0, :rsa_file => nil, :dpx => false }.merge(opts)
 	protein = opts.fetch(:protein)
 	charge = opts.fetch(:charge)
 	rsa_file = opts.fetch(:rsa_file)
 	threshold = opts.fetch(:threshold)
+	
+	rsa_file = nil if opts.fetch(:dpx) == true
 	
 	list = Array.new
 	neutrals = NEUTRALS
@@ -80,6 +83,32 @@ def get_vector_sum protein, res_list
 	vectors.inject {|sum, x| sum + x} # returns the sum of all vectors in the list
 end
 
+def get_dpx_weighted_vector_sum protein, dpx_file, res_list
+  dpx = parse_dpx_protein dpx_file, res_list
+  vectors = res_list.map {|res| get_normalized_residue_vector(protein, res)}
+  output = Array.new
+  vectors.each do |vector|
+    i = vectors.index(vector)
+    output[i] = 9 * vector / (dpx[i] * dpx[i])
+  end
+  output.inject {|sum, x| sum + x}
+end
+
+def parse_dpx_protein pdb_file, res_list
+  protein = Bio::PDB.new(IO.read(pdb_file))
+  output = Array.new
+  res_list.each do |res|
+    resseq, resname = res.resSeq, res.resName
+    atoms = protein.find_atom {|a| a.resSeq == resseq && a.resName == resname}
+    value = 0
+    atoms.each do |atom|
+      value = value + atom.tempFactor
+    end
+    output << value / atoms.size
+  end
+  return output
+end
+
 def parse_rsa_file rsa_file
 	# FIXED 2013-07-24
 	# as rsa file is a width-fixed text file, data should be parsed as line[0..2]
@@ -105,11 +134,17 @@ end
 
 def calc_procd_score(opts = {})
 	# option parsing
-	opts = {:threshold => 10.0, :rsa_file=>nil, :mutations=>nil }.merge(opts) # default threshold is 10.0
+	opts = {:threshold => 10.0, :rsa_file=>nil, :mutations=>nil, :dpx=>false }.merge(opts) # default threshold is 10.0
 	pdb_file = opts.fetch(:pdb_file) # name of pdb file 
 	rsa_file = opts.fetch(:rsa_file) # name of rsa file
 	threshold = opts.fetch(:threshold) # RSA threshold
 	mutations = opts.fetch(:mutations) # mutations
+	dpx = opts.fetch(:dpx)
+	if dpx
+	  rsa_file = nil
+	  mutations = nil
+	  dpx_file = pdb_file[0..-5] + "_dpx.pdb"
+	end
 	
 	# parse protein
 	begin
@@ -133,13 +168,21 @@ def calc_procd_score(opts = {})
 	if pos_size == 0
 		pp = 0
 	else
-		pp = get_vector_sum(protein, pos)
+	  if dpx
+	    pp = get_dpx_weighted_vector_sum(protein, dpx_file, pos)
+	  else
+		  pp = get_vector_sum(protein, pos)
+		end
 	end
 	
 	if neg_size == 0
 		nn = 0
 	else
-		nn = get_vector_sum(protein, neg)
+	  if dpx
+	    nn = get_dpx_weighted_vector_sum(protein, dpx_file, neg)
+	  else
+		  nn = get_vector_sum(protein, neg)
+		end
 	end
 
 	# mutation
